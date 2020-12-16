@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pctracker"
+version = "0.1.0"
+description = ""
+authors = ["Remi Rampin <remirampin@gmail.com>"]
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+
+[tool.poetry.dev-dependencies]
+
+[tool.poetry.scripts]
+record = "pctracker.record:main"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
