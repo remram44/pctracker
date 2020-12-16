@@ -50,7 +50,8 @@ def main():
             CREATE TABLE runs(
                 id INTEGER PRIMARY KEY,
                 start DATETIME NOT NULL,
-                end DATETIME NULL
+                end DATETIME NULL,
+                end_reason TEXT NOT NULL DEFAULT ''
             );
             CREATE INDEX idx_runs_start ON runs(start);
             CREATE INDEX idx_runs_end ON runs(end);
@@ -104,7 +105,7 @@ def main():
             database.execute(
                 '''\
                 UPDATE runs
-                SET end = start
+                SET end = start, end_reason = 'stopped'
                 WHERE end IS NULL;
                 ''',
             )
@@ -112,7 +113,7 @@ def main():
             database.execute(
                 '''\
                 UPDATE runs
-                SET end = ?
+                SET end = ?, end_reason = 'stopped'
                 WHERE end IS NULL;
                 ''',
                 most_recent_events[0],
@@ -152,7 +153,7 @@ def main():
                 database.execute(
                     '''\
                     UPDATE runs
-                    SET end=datetime()
+                    SET end=datetime(), end_reason = 'inactive'
                     WHERE id=?;
                     ''',
                     (current_run,)
