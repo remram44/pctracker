@@ -1,4 +1,6 @@
+from datetime import datetime
 import logging
+import pynput
 import os
 import sqlite3
 import subprocess
@@ -6,6 +8,30 @@ import time
 
 
 logger = logging.getLogger(__name__)
+
+
+MAX_INACTIVE_TIME = 30#2 * 60
+
+
+class InputMonitor(object):
+    def __init__(self):
+        self.mouse = pynput.mouse.Listener(
+            on_move=self.on_input,
+            on_click=self.on_input,
+            on_scroll=self.on_input,
+        )
+        self.mouse.start()
+
+        self.keyboard = pynput.keyboard.Listener(
+            on_press=self.on_input,
+            on_release=self.on_input,
+        )
+        self.keyboard.start()
+
+        self.last_input = datetime.utcnow()
+
+    def on_input(self, *args, **kwargs):
+        self.last_input = datetime.utcnow()
 
 
 def main():
@@ -92,19 +118,63 @@ def main():
                 most_recent_events[0],
             )
 
+    # Monitor inputs
+    input_monitor = InputMonitor()
+
     # Start run
-    database.execute(
+    cursor = database.cursor()
+    cursor.execute(
         '''\
         INSERT INTO runs(start)
         VALUES(datetime());
         ''',
     )
+    current_run = cursor.lastrowid
     database.commit()
 
     current_windows = {}
 
     # Loop forever
     while True:
+        time.sleep(5)
+
+        # Check whether user has gone away
+        inactive_time = (datetime.utcnow() - input_monitor.last_input)
+        inactive_time = inactive_time.total_seconds()
+        if inactive_time > MAX_INACTIVE_TIME:
+            # He's gone
+            if current_run is not None:
+                logger.warning("Input inactive")
+
+                # TODO: Erase events since he went away?
+
+                # End run
+                database.execute(
+                    '''\
+                    UPDATE runs
+                    SET end=datetime()
+                    WHERE id=?;
+                    ''',
+                    (current_run,)
+                )
+                database.commit()
+                current_run = None
+                current_windows = {}
+
+            continue
+        else:
+            if current_run is None:
+                logger.warning("Input active again")
+                cursor = database.cursor()
+                cursor.execute(
+                    '''\
+                    INSERT INTO runs(start)
+                    VALUES(datetime());
+                    ''',
+                )
+                current_run = cursor.lastrowid
+                database.commit()
+
         active_id = get_active_window()
         window_ids = get_windows()
 
@@ -154,8 +224,6 @@ def main():
 
         logger.info('')
         database.commit()
-
-        time.sleep(5)
 
 
 def parse_number(s):
