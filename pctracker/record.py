@@ -182,7 +182,11 @@ def main():
         extend_windows = []
         insert_windows = []
         for window_id in window_ids:
-            name = get_window_name(window_id)
+            try:
+                name = get_window_name(window_id)
+            except ValueError:
+                # Window is gone, let next loop remove it
+                continue
             active = window_id == active_id
 
             if window_id in current_windows:
@@ -253,5 +257,8 @@ def get_windows():
 
 
 def get_window_name(window_id):
-    output = subprocess.check_output(['xdotool', 'getwindowname', str(window_id)])
-    return output.decode('utf-8').rstrip('\r\n')
+    try:
+        output = subprocess.check_output(['xdotool', 'getwindowname', str(window_id)])
+        return output.decode('utf-8').rstrip('\r\n')
+    except subprocess.CalledProcessError:
+        raise ValueError
