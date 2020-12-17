@@ -1,7 +1,7 @@
 import subprocess
 import typing
 
-from .base import Window
+from .base import RecordError, Window
 
 
 def _parse_number(s):
@@ -12,22 +12,28 @@ def _parse_number(s):
 
 
 def _get_active_window():
-    output = subprocess.check_output(['xdotool', 'getactivewindow'])
+    try:
+        output = subprocess.check_output(['xdotool', 'getactivewindow'])
+    except subprocess.CalledProcessError:
+        raise RecordError
     return _parse_number(output.decode('utf-8').strip())
 
 
 def _get_window_name(window_id):
     try:
         output = subprocess.check_output(['xdotool', 'getwindowname', str(window_id)])
-        return output.decode('utf-8').rstrip('\r\n')
     except subprocess.CalledProcessError:
         raise ValueError
+    return output.decode('utf-8').rstrip('\r\n')
 
 
 def get_windows() -> typing.List[Window]:
     active_id = _get_active_window()
 
-    output = subprocess.check_output(['xprop', '-root'])
+    try:
+        output = subprocess.check_output(['xprop', '-root'])
+    except subprocess.CalledProcessError:
+        raise RecordError
     output = output.decode('utf-8')
     for line in output.splitlines():
         if line.startswith('_NET_CLIENT_LIST_STACKING(WINDOW)'):

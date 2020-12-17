@@ -2,6 +2,10 @@ from datetime import datetime
 import pynput
 
 
+class RecordError(Exception):
+    """Couldn't inspect windows right now (is screen locked?)"""
+
+
 class Window(object):
     id: int
     name: str

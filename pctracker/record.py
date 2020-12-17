@@ -4,7 +4,7 @@ import os
 import sqlite3
 import time
 
-from .base import PynputMonitor
+from .base import PynputMonitor, RecordError
 from .x11 import get_windows
 
 
@@ -120,9 +120,21 @@ def main():
         time.sleep(5)
 
         # Check whether user has gone away
+        inactive = None
         inactive_time = (datetime.utcnow() - input_monitor.last_input)
         inactive_time = inactive_time.total_seconds()
         if inactive_time > MAX_INACTIVE_TIME:
+            inactive = 'inactive'
+
+        # Check if windows can be captured
+        windows = None  # avoids warning
+        if not inactive:
+            try:
+                windows = get_windows()
+            except RecordError:
+                inactive = 'locked'
+
+        if inactive:
             # He's gone
             if current_run is not None:
                 logger.warning("Input inactive")
@@ -133,10 +145,10 @@ def main():
                 database.execute(
                     '''\
                     UPDATE runs
-                    SET end=datetime(), end_reason = 'inactive'
-                    WHERE id=?;
+                    SET end=datetime(), end_reason = :reason
+                    WHERE id=:id;
                     ''',
-                    (current_run,)
+                    dict(id=current_run, reason=inactive),
                 )
                 database.commit()
                 current_run = None
@@ -155,8 +167,6 @@ def main():
                 )
                 current_run = cursor.lastrowid
                 database.commit()
-
-        windows = get_windows()
 
         extend_windows = []
         insert_windows = []
