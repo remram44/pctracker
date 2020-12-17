@@ -1,37 +1,17 @@
 from datetime import datetime
 import logging
-import pynput
 import os
 import sqlite3
-import subprocess
 import time
+
+from .base import PynputMonitor
+from .x11 import get_windows
 
 
 logger = logging.getLogger(__name__)
 
 
-MAX_INACTIVE_TIME = 30#2 * 60
-
-
-class InputMonitor(object):
-    def __init__(self):
-        self.mouse = pynput.mouse.Listener(
-            on_move=self.on_input,
-            on_click=self.on_input,
-            on_scroll=self.on_input,
-        )
-        self.mouse.start()
-
-        self.keyboard = pynput.keyboard.Listener(
-            on_press=self.on_input,
-            on_release=self.on_input,
-        )
-        self.keyboard.start()
-
-        self.last_input = datetime.utcnow()
-
-    def on_input(self, *args, **kwargs):
-        self.last_input = datetime.utcnow()
+MAX_INACTIVE_TIME = 30
 
 
 def main():
@@ -120,7 +100,7 @@ def main():
             )
 
     # Monitor inputs
-    input_monitor = InputMonitor()
+    input_monitor = PynputMonitor()
 
     # Start run
     cursor = database.cursor()
@@ -176,29 +156,22 @@ def main():
                 current_run = cursor.lastrowid
                 database.commit()
 
-        active_id = get_active_window()
-        window_ids = get_windows()
+        windows = get_windows()
 
         extend_windows = []
         insert_windows = []
-        for window_id in window_ids:
-            try:
-                name = get_window_name(window_id)
-            except ValueError:
-                # Window is gone, let next loop remove it
-                continue
-            active = window_id == active_id
-
-            if window_id in current_windows:
-                current = current_windows[window_id]
-                if current[1] == (name, active):
+        for window in windows:
+            if window.id in current_windows:
+                current = current_windows[window.id]
+                if current[1] == (window.name, window.active):
                     extend_windows.append(current[0])
                 else:
-                    del current_windows[window_id]
-                    insert_windows.append((window_id, name, active))
+                    del current_windows[window.id]
+                    insert_windows.append(window)
             else:
-                insert_windows.append((window_id, name, active))
+                insert_windows.append(window)
 
+        window_ids = set(window.id for window in windows)
         for window_id, current in list(current_windows.items()):
             if window_id not in window_ids:
                 del current_windows[window_id]
@@ -216,49 +189,16 @@ def main():
                 ((i,) for i in extend_windows),
             )
         if insert_windows:
-            for window_id, name, active in insert_windows:
-                logger.info("insert %s %s", ('Y' if active else 'n'), name)
+            for window in insert_windows:
+                logger.info("insert %s %s", ('Y' if window.active else 'n'), window.name)
                 cursor.execute(
                     '''\
                     INSERT INTO windows(start, end, active, name)
                     VALUES(datetime(), datetime(), ?, ?);
                     ''',
-                    (active, name),
+                    (window.active, window.name),
                 )
-                current_windows[window_id] = cursor.lastrowid, (name, active)
+                current_windows[window.id] = cursor.lastrowid, (window.name, window.active)
 
         logger.info('')
         database.commit()
-
-
-def parse_number(s):
-    if s.startswith('0x'):
-        return int(s[2:], 16)
-    else:
-        return int(s, 10)
-
-
-def get_active_window():
-    output = subprocess.check_output(['xdotool', 'getactivewindow'])
-    return parse_number(output.decode('utf-8').strip())
-
-
-def get_windows():
-    output = subprocess.check_output(['xprop', '-root'])
-    output = output.decode('utf-8')
-    for line in output.splitlines():
-        if line.startswith('_NET_CLIENT_LIST_STACKING(WINDOW)'):
-            pos = line.find('0x')
-            ids = line[pos:].split(',')
-            ids = [parse_number(id.strip()) for id in ids]
-            return ids
-
-    raise RuntimeError("xprop didn't provide active windows")
-
-
-def get_window_name(window_id):
-    try:
-        output = subprocess.check_output(['xdotool', 'getwindowname', str(window_id)])
-        return output.decode('utf-8').rstrip('\r\n')
-    except subprocess.CalledProcessError:
-        raise ValueError
