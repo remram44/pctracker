@@ -5,6 +5,7 @@ import sqlite3
 import time
 
 from .base import PynputMonitor, RecordError
+from .lock import PidFile
 from .x11 import get_windows
 
 
@@ -20,6 +21,9 @@ def main():
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+    # Lock pid file
+    pid_file = PidFile('database.pid')
 
     # Open database
     create_tables = not os.path.exists('database.sqlite3')
