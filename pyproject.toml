@@ -13,6 +13,7 @@ pynput = "^1.7"
 
 [tool.poetry.scripts]
 record = "pctracker.record:main"
+analyze = "pctracker.analyze:main"
 
 [build-system]
 requires = ["poetry>=0.12"]
