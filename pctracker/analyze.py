@@ -1,6 +1,8 @@
+import itertools
 import sqlite3
 
-from .utils import db2datetime
+from .trie import TrieCounter
+from .utils import PeekableIterator, db2datetime
 
 
 def format_duration(seconds):
@@ -30,6 +32,8 @@ class OutputNode(object):
         self.name = name
         self.duration = 0
         self.children = {}
+        self.other_prefixes = TrieCounter()
+        self.other_suffixes = TrieCounter()
 
     def child(self, name):
         try:
@@ -37,6 +41,34 @@ class OutputNode(object):
         except KeyError:
             child = self.children[name] = OutputNode(name)
         return child
+
+    def unknown_record(self, record):
+        words = record.name.split()
+        self.other_prefixes.add(words)
+        self.other_suffixes.add(words[::-1])
+
+    def other(self):
+        prefixes = PeekableIterator(self.other_prefixes.most_common())
+        suffixes = PeekableIterator(self.other_suffixes.most_common())
+        while True:
+            prefix = prefixes.peek()
+            suffix = suffixes.peek()
+            if prefix is prefixes.END:
+                if suffix is suffixes.END:
+                    break
+                next(suffixes)  # Consume
+                yield 'suffix', ' '.join(suffix[0][::-1]), suffix[1]
+            else:
+                if suffix is suffixes.END:
+                    next(prefixes)  # Consume
+                    yield 'prefix', ' '.join(prefix[0]), prefix[1]
+                else:
+                    if prefix[1] >= suffix[1]:
+                        next(prefixes)  # Consume
+                        yield 'prefix', ' '.join(prefix[0]), prefix[1]
+                    else:
+                        next(suffixes)  # Consume
+                        yield 'suffix', ' '.join(suffix[0][::-1]), suffix[1]
 
     def print(self, indent=0):
         if indent == 0:
@@ -56,7 +88,9 @@ class OutputNode(object):
             child.print(indent + 1)
             other_duration -= child.duration
         if self.children:
-            print(f'{last_prefix}other {other_duration}')
+            others = itertools.islice(self.other(), 5)
+            others = ' ' + ', '.join(repr(o[1]) for o in others)
+            print(f'{last_prefix}other {other_duration}' + others)
 
 
 def prefix(string, name=None):
@@ -95,6 +129,8 @@ def apply_filters(record, filters, output):
             record.name = m
             apply_filters(record, then_ops, output.child(name))
             return
+    # This record doesn't match filters
+    output.unknown_record(record)
 
 
 def main():
