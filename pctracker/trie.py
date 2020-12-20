@@ -24,9 +24,7 @@ class TrieCounter(object):
             node = self.elements[element] = TrieCounter()
         node._add(iterator)
 
-    def most_common(self, threshold=0.2):
-        if threshold < 1:
-            threshold = math.floor(threshold * self.cardinality)
+    def _most_common(self, threshold, first=False):
         if self.cardinality < threshold:
             return
         yielded = 0
@@ -34,11 +32,18 @@ class TrieCounter(object):
             self.elements.items(),
             key=lambda p: -p[1].cardinality,
         ):
-            for seq, card in node.most_common(threshold):
+            for seq, card in node._most_common(threshold):
                 yielded += card
                 yield (key,) + seq, card
-        if self.cardinality - yielded > threshold:
+        if not first and self.cardinality - yielded > threshold:
             yield (), self.cardinality
+
+    def most_common(self, threshold=0.2):
+        if threshold < 1:
+            threshold = math.floor(threshold * self.cardinality)
+        if self.cardinality < threshold:
+            return
+        return self._most_common(threshold, True)
 
     def __eq__(self, other):
         if not isinstance(other, TrieCounter):
