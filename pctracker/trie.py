@@ -25,13 +25,13 @@ class TrieCounter(object):
         node._add(iterator)
 
     def _most_common(self, threshold, first=False):
-        if self.cardinality < threshold:
-            return
         yielded = 0
         for key, node in sorted(
             self.elements.items(),
             key=lambda p: -p[1].cardinality,
         ):
+            if node.cardinality < threshold:
+                break
             for seq, card in node._most_common(threshold):
                 yielded += card
                 yield (key,) + seq, card
