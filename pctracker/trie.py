@@ -1,3 +1,4 @@
+import math
 import unittest
 
 
@@ -22,6 +23,22 @@ class TrieCounter(object):
         except KeyError:
             node = self.elements[element] = TrieCounter()
         node._add(iterator)
+
+    def most_common(self, threshold=0.2):
+        if threshold < 1:
+            threshold = math.floor(threshold * self.cardinality)
+        if self.cardinality < threshold:
+            return
+        yielded = 0
+        for key, node in sorted(
+            self.elements.items(),
+            key=lambda p: -p[1].cardinality,
+        ):
+            for seq, card in node.most_common(threshold):
+                yielded += card
+                yield (key,) + seq, card
+        if self.cardinality - yielded > threshold:
+            yield (), self.cardinality
 
     def __eq__(self, other):
         if not isinstance(other, TrieCounter):
@@ -98,6 +115,25 @@ class TestTrieCounter(unittest.TestCase):
                     ),
                 )
             ),
+        )
+
+    def test_most_common(self):
+        trie = TrieCounter()
+        trie.add('abc')
+        trie.add('abde')
+        trie.add('cde')
+        trie.add('cfg')
+        trie.add('abdij')
+        trie.add('dfg')
+        trie.add('af')
+
+        self.assertEqual(
+            list(trie.most_common()),
+            [
+                (('a', 'b', 'd'), 2),
+                (('a',), 4),
+                (('c',), 2),
+            ],
         )
 
 
