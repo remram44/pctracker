@@ -6,6 +6,7 @@ import time
 
 from .base import PynputMonitor, RecordError
 from .lock import PidFile
+from .utils import datetime2db
 from .x11 import get_windows
 
 
@@ -121,6 +122,7 @@ def main():
 
     # Loop forever
     while True:
+        sample_start = datetime.utcnow()
         time.sleep(5)
 
         # Check whether user has gone away
@@ -208,9 +210,9 @@ def main():
                 cursor.execute(
                     '''\
                     INSERT INTO windows(start, end, active, name)
-                    VALUES(datetime(), datetime(), ?, ?);
+                    VALUES(?, datetime(), ?, ?);
                     ''',
-                    (window.active, window.name),
+                    (datetime2db(sample_start), window.active, window.name),
                 )
                 current_windows[window.id] = cursor.lastrowid, (window.name, window.active)
 
