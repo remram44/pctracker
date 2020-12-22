@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os
 import sqlite3
@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 MAX_INACTIVE_TIME = 30
+
+INTERVAL = 5
 
 
 def main():
@@ -40,7 +42,7 @@ def main():
             );
             CREATE INDEX idx_runs_start ON runs(start);
             CREATE INDEX idx_runs_end ON runs(end);
-            
+
             CREATE TABLE windows(
                 id INTEGER PRIMARY KEY,
                 start DATETIME NOT NULL,
@@ -122,12 +124,12 @@ def main():
 
     # Loop forever
     while True:
-        sample_start = datetime.utcnow()
-        time.sleep(5)
+        time.sleep(INTERVAL)
+        now = datetime.utcnow()
 
         # Check whether user has gone away
         inactive = None
-        inactive_time = (datetime.utcnow() - input_monitor.last_input)
+        inactive_time = (now - input_monitor.last_input)
         inactive_time = inactive_time.total_seconds()
         if inactive_time > MAX_INACTIVE_TIME:
             inactive = 'inactive'
@@ -151,10 +153,14 @@ def main():
                 database.execute(
                     '''\
                     UPDATE runs
-                    SET end=datetime(), end_reason = :reason
+                    SET end=:now, end_reason = :reason
                     WHERE id=:id;
                     ''',
-                    dict(id=current_run, reason=inactive),
+                    dict(
+                        now=datetime2db(now),
+                        id=current_run,
+                        reason=inactive,
+                    ),
                 )
                 database.commit()
                 current_run = None
@@ -168,8 +174,9 @@ def main():
                 cursor.execute(
                     '''\
                     INSERT INTO runs(start)
-                    VALUES(datetime());
+                    VALUES(?);
                     ''',
+                    (datetime2db(now),),
                 )
                 current_run = cursor.lastrowid
                 database.commit()
@@ -199,10 +206,10 @@ def main():
             cursor.executemany(
                 '''\
                 UPDATE windows
-                SET end=datetime()
+                SET end=?
                 WHERE id=?;
                 ''',
-                ((i,) for i in extend_windows),
+                ((datetime2db(now), i) for i in extend_windows),
             )
         if insert_windows:
             for window in insert_windows:
@@ -210,9 +217,14 @@ def main():
                 cursor.execute(
                     '''\
                     INSERT INTO windows(start, end, active, name)
-                    VALUES(?, datetime(), ?, ?);
+                    VALUES(:start, :end, :active, :name);
                     ''',
-                    (datetime2db(sample_start), window.active, window.name),
+                    dict(
+                        start=datetime2db(now - timedelta(seconds=INTERVAL)),
+                        end=datetime2db(now),
+                        active=window.active,
+                        name=window.name,
+                    ),
                 )
                 current_windows[window.id] = cursor.lastrowid, (window.name, window.active)
 
