@@ -48,12 +48,14 @@ def main():
                 start DATETIME NOT NULL,
                 end DATETIME NOT NULL,
                 active BOOLEAN NOT NULL,
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
+                executable TEXT NULL CHECK (executable <> '')
             );
             CREATE INDEX idx_windows_start ON windows(start);
             CREATE INDEX idx_windows_end ON windows(end);
             CREATE INDEX idx_windows_active ON windows(active) WHERE active=1;
             CREATE INDEX idx_windows_name ON windows(name);
+            CREATE INDEX idx_windows_executable ON windows(executable);
             ''',
         )
 
@@ -216,14 +218,15 @@ def main():
                 logger.info("insert %s %s", ('Y' if window.active else 'n'), window.name)
                 cursor.execute(
                     '''\
-                    INSERT INTO windows(start, end, active, name)
-                    VALUES(:start, :end, :active, :name);
+                    INSERT INTO windows(start, end, active, name, executable)
+                    VALUES(:start, :end, :active, :name, :executable);
                     ''',
                     dict(
                         start=datetime2db(now - timedelta(seconds=INTERVAL)),
                         end=datetime2db(now),
                         active=window.active,
                         name=window.name,
+                        executable=window.executable,
                     ),
                 )
                 current_windows[window.id] = cursor.lastrowid, (window.name, window.active)

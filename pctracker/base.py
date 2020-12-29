@@ -10,11 +10,19 @@ class Window(object):
     id: int
     name: str
     active: bool
+    executable: str
 
-    def __init__(self, id: int, name: str, active: bool):
+    def __init__(
+        self,
+        id: int,
+        name: str,
+        active: bool,
+        executable: str = None,
+    ):
         self.id = id
         self.name = name
         self.active = active
+        self.executable = executable
 
 
 class InputMonitor(object):
